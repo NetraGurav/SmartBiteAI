@@ -1,67 +1,65 @@
-import axios from 'axios';
-import toast from 'react-hot-toast';
+import axios from "axios";
+import toast from "react-hot-toast";
 
-// Create axios instance with base configuration
+// Safe toast wrapper to avoid crashes before React mounts
+const safeToast = {
+  error: (msg) => {
+    if (typeof window !== "undefined" && window.__APP_READY__) {
+      toast.error(msg);
+    } else {
+      console.warn("Toast suppressed (app not mounted yet):", msg);
+    }
+  },
+};
+
+// Notify app is mounted (call this inside index.js)
+window.__APP_READY__ = true;
+
+// Backend URL from env (this supports local + Netlify)
+const API_BASE = process.env.REACT_APP_API_URL;
+
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
-  timeout: 30000, // 30 seconds timeout for OCR operations
+  baseURL: API_BASE,
+  timeout: 30000,
 });
 
-// Request interceptor to add auth token
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    const token = localStorage.getItem("token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Enhanced response interceptor for error handling
+// Response interceptor
 api.interceptors.response.use(
-  (response) => {
-    // Log successful responses for debugging
-    console.log(`✅ API Success: ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
-    return response;
+  (res) => {
+    console.log(
+      `✅ API Success: ${res.config.method?.toUpperCase()} ${res.config.url}`
+    );
+    return res;
   },
   (error) => {
-    // Enhanced error logging
-    console.error('❌ API Error Details:', {
-      method: error.config?.method?.toUpperCase(),
-      url: error.config?.url,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      message: error.message
-    });
-    
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      console.log('🔐 Authentication failed - redirecting to login');
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-      toast.error('Session expired. Please login again.');
-    } else if (error.response?.status === 500) {
-      const serverError = error.response?.data?.message || 'Internal server error';
-      console.error('🚨 Server Error:', serverError);
-      toast.error(`Server error: ${serverError}`);
-    } else if (error.response?.status === 400) {
-      const validationError = error.response?.data?.message || 'Invalid request';
-      console.error('⚠️ Validation Error:', validationError);
-      toast.error(`Validation error: ${validationError}`);
-    } else if (error.code === 'ECONNREFUSED' || error.code === 'NETWORK_ERROR' || !error.response) {
-      console.error('🌐 Network/Connection Error');
-      toast.error('Cannot connect to server. Please check if the backend is running.');
-    } else {
-      const message = error.response?.data?.message || error.message || 'An unexpected error occurred';
-      console.error('❓ Other Error:', message);
-      toast.error(message);
+    const status = error.response?.status;
+
+    if (!error.response) {
+      safeToast.error("Cannot connect to server.");
+      return Promise.reject(error);
     }
-    
+
+    if (status === 401) {
+      localStorage.removeItem("token");
+      safeToast.error("Session expired. Please login again.");
+      window.location.href = "/login";
+      return;
+    }
+
+    const msg =
+      error.response?.data?.message || error.message || "Something went wrong";
+
+    safeToast.error(msg);
     return Promise.reject(error);
   }
 );
