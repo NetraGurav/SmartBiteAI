@@ -1,7 +1,4 @@
-//--------------------------------------------------------------
-// SmartBite AI Backend (FULL FILE WITH FIXED MONGO CONNECTION)
-//--------------------------------------------------------------
-
+// server/index.js
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -73,13 +70,14 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI =
   process.env.MONGO_URI || "mongodb://127.0.0.1:27017/smartbiteai";
 
-console.log("💾 MongoDB URI:", MONGO_URI);
+console.log("💾 MongoDB URI set (length):", MONGO_URI ? MONGO_URI.length : 0);
 
 async function connectDB() {
   try {
     console.log("\n⏳ Attempting MongoDB connection...");
 
     await mongoose.connect(MONGO_URI, {
+      // Mongoose 8 default options are fine; connection tuning below:
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
@@ -87,14 +85,17 @@ async function connectDB() {
 
     console.log("✅ MongoDB connected successfully!");
   } catch (err) {
-    console.log("❌ MongoDB connection failed:", err.message);
-    console.log("🔁 Retrying in 3 seconds...");
+    console.error(
+      "❌ MongoDB connection failed:",
+      err && err.message ? err.message : err
+    );
+    console.log("🔁 Retrying in 6 seconds...");
     setTimeout(connectDB, 6000);
   }
 }
 
-// Delay connection until Windows MongoDB service fully starts
-setTimeout(connectDB, 6000);
+// Start connecting immediately (retry logic inside connectDB handles reconnection)
+connectDB();
 
 // MongoDB events
 mongoose.connection.on("connected", () => console.log("🔗 MongoDB connected"));
@@ -106,13 +107,17 @@ mongoose.connection.on("disconnected", () => {
   setTimeout(connectDB, 6000);
 });
 mongoose.connection.on("error", (err) =>
-  console.error("❌ MongoDB error:", err.message)
+  console.error("❌ MongoDB error:", err && err.message ? err.message : err)
 );
 
 // Graceful Shutdown
 process.on("SIGINT", async () => {
   console.log("\n🛑 Graceful shutdown...");
-  await mongoose.connection.close();
+  try {
+    await mongoose.connection.close();
+  } catch (e) {
+    console.error("Error while closing mongoose connection:", e);
+  }
   process.exit(0);
 });
 
@@ -136,7 +141,7 @@ app.get("/", (req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error("❌ Error:", err.stack);
+  console.error("❌ Error:", err && err.stack ? err.stack : err);
   res.status(500).json({ success: false, message: "Something went wrong!" });
 });
 
