@@ -1,21 +1,18 @@
 import axios from "axios";
 import toast from "react-hot-toast";
 
-// Safe toast wrapper to avoid crashes before React mounts
+// Safe toast to avoid app crash
 const safeToast = {
   error: (msg) => {
-    if (typeof window !== "undefined" && window.__APP_READY__) {
+    try {
       toast.error(msg);
-    } else {
-      console.warn("Toast suppressed (app not mounted yet):", msg);
+    } catch (err) {
+      console.warn("Toast suppressed:", msg);
     }
   },
 };
 
-// Notify app is mounted (call this inside index.js)
-window.__APP_READY__ = true;
-
-// Backend URL from env (this supports local + Netlify)
+// Backend URL (local + Netlify)
 const API_BASE = process.env.REACT_APP_API_URL;
 
 const api = axios.create({
@@ -23,7 +20,7 @@ const api = axios.create({
   timeout: 30000,
 });
 
-// Request interceptor
+// Attach token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -33,14 +30,9 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor
+// Handle API errors
 api.interceptors.response.use(
-  (res) => {
-    console.log(
-      `✅ API Success: ${res.config.method?.toUpperCase()} ${res.config.url}`
-    );
-    return res;
-  },
+  (res) => res,
   (error) => {
     const status = error.response?.status;
 
