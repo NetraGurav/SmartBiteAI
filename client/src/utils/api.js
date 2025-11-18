@@ -12,9 +12,19 @@ const safeToast = {
   },
 };
 
-// Backend URL EXACTLY as in .env
-const API_BASE = process.env.REACT_APP_API_URL;
+// ===============================
+// SMART BACKEND URL HANDLING
+// ===============================
 
+let API_BASE =
+  process.env.REACT_APP_API_URL || // If .env exists → use it
+  (window.location.hostname === "localhost"
+    ? "http://localhost:5000/api" // Local dev
+    : "https://smartbiteai-sdb9.onrender.com/api"); // Deployed
+
+console.log("🔥 Using API:", API_BASE);
+
+// Axios instance
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 30000,
