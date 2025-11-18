@@ -12,7 +12,7 @@ const safeToast = {
   },
 };
 
-// Backend URL (local + Netlify)
+// Backend URL EXACTLY as in .env
 const API_BASE = process.env.REACT_APP_API_URL;
 
 const api = axios.create({
@@ -30,10 +30,40 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Handle API errors
+// ------------ SMART RETRY LOGIC ------------
+const shouldRetry = (error) => {
+  const status = error.response?.status;
+
+  return (
+    !error.response || // no response (Render waking up)
+    status === 404 || // endpoint temporarily not available
+    status === 502 || // backend restarting
+    status === 503 // service unavailable
+  );
+};
+
+// Handle API errors + retry
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
+  async (error) => {
+    const config = error.config;
+
+    // initialize retry counter
+    if (!config._retryCount) config._retryCount = 0;
+
+    // IF backend is waking up → retry up to 3 times
+    if (shouldRetry(error) && config._retryCount < 3) {
+      config._retryCount++;
+
+      console.warn(
+        `Retrying request (${config._retryCount}/3)... backend may be waking up`
+      );
+
+      await new Promise((r) => setTimeout(r, 1000)); // wait 1 second
+      return api(config); // retry request
+    }
+
+    // Normal error handling after retries fail
     const status = error.response?.status;
 
     if (!error.response) {
